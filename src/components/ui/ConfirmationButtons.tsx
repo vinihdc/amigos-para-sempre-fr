@@ -1,4 +1,5 @@
-export type ConfirmationStatus = "VOU" | "NÃO VOU" | "TALVEZ";
+import type { ConfirmationStatus } from "../../types";
+export type { ConfirmationStatus };
 
 interface ConfirmationButtonsProps {
   value: ConfirmationStatus | null;

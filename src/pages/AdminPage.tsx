@@ -1,9 +1,10 @@
 import { useState } from "react";
-import { Settings, Plus, Pencil, UserX, UserCheck } from "lucide-react";
-import type { Player } from "../types";
+import { Settings, Plus, Pencil, UserX, UserCheck, CalendarPlus } from "lucide-react";
+import type { Game, Player } from "../types";
 import { usePlayerAdmin } from "../hooks/usePlayerAdmin";
 import { PlayerForm } from "../components/ui/PlayerForm";
 import type { PlayerInput } from "../services/playersService";
+import { createGame } from "../services/gamesService";
 
 interface AdminPageProps {
   count: number;
@@ -11,11 +12,16 @@ interface AdminPageProps {
   teamCount: number;
   onCountChange: (count: number) => void;
   onGenerate: () => void;
+  game: Game | null;
+  onGameCreated: () => void;
 }
 
-export function AdminPage({ count, maxCount, teamCount, onCountChange, onGenerate }: AdminPageProps) {
+export function AdminPage({ count, maxCount, teamCount, onCountChange, onGenerate, game, onGameCreated }: AdminPageProps) {
   const { players, loading, error, saving, create, update, deactivate, reactivate } = usePlayerAdmin();
   const [editing, setEditing] = useState<Player | "new" | null>(null);
+  const [gameForm, setGameForm] = useState({ date: "", time: "20:00", location: "Arena Society" });
+  const [gameSaving, setGameSaving] = useState(false);
+  const [gameError, setGameError] = useState<string | null>(null);
 
   async function handleSubmit(input: PlayerInput) {
     if (editing === "new") {
@@ -26,8 +32,59 @@ export function AdminPage({ count, maxCount, teamCount, onCountChange, onGenerat
     setEditing(null);
   }
 
+  async function handleCreateGame(e: React.FormEvent) {
+    e.preventDefault();
+    if (!gameForm.date) {
+      setGameError("Escolha uma data.");
+      return;
+    }
+    setGameSaving(true);
+    setGameError(null);
+    try {
+      await createGame(gameForm);
+      onGameCreated();
+    } catch (err) {
+      setGameError(err instanceof Error ? err.message : "Erro ao criar jogo.");
+    } finally {
+      setGameSaving(false);
+    }
+  }
+
   return (
     <section className="space-y-4">
+      {!game && (
+        <form onSubmit={handleCreateGame} className="card space-y-3 p-6">
+          <div className="flex items-center gap-2">
+            <CalendarPlus />
+            <h2 className="text-xl font-black">Agendar próximo jogo</h2>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-3">
+            <input
+              type="date"
+              className="rounded-xl bg-zinc-900 p-3 outline-none"
+              value={gameForm.date}
+              onChange={(e) => setGameForm((f) => ({ ...f, date: e.target.value }))}
+            />
+            <input
+              type="time"
+              className="rounded-xl bg-zinc-900 p-3 outline-none"
+              value={gameForm.time}
+              onChange={(e) => setGameForm((f) => ({ ...f, time: e.target.value }))}
+            />
+            <input
+              className="rounded-xl bg-zinc-900 p-3 outline-none"
+              value={gameForm.location}
+              onChange={(e) => setGameForm((f) => ({ ...f, location: e.target.value }))}
+              placeholder="Local"
+            />
+          </div>
+          {gameError && <div className="text-sm text-red-400">{gameError}</div>}
+          <button type="submit" disabled={gameSaving} className="btn btn-primary disabled:opacity-50">
+            {gameSaving ? "Criando..." : "Criar jogo"}
+          </button>
+        </form>
+      )}
+
       <div className="card p-6">
         <div className="mb-4 flex items-center gap-2">
           <Settings />

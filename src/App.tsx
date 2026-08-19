@@ -1,7 +1,6 @@
 import { useMemo, useState } from "react";
 import { Header } from "./components/layout/Header";
 import { TabNav, type Tab } from "./components/layout/TabNav";
-import type { ConfirmationStatus } from "./components/ui/ConfirmationButtons";
 import { HomePage } from "./pages/HomePage";
 import { GamePage } from "./pages/GamePage";
 import { ProfilePage } from "./pages/ProfilePage";
@@ -10,16 +9,24 @@ import { AdminPage } from "./pages/AdminPage";
 import { LoginPage } from "./pages/LoginPage";
 import { AuthProvider, useAuth } from "./hooks/useAuth";
 import { usePlayers } from "./hooks/usePlayers";
+import { useNextGame } from "./hooks/useNextGame";
 import { generateBalancedTeams } from "./algorithms/balance";
 import { supabase } from "./lib/supabase";
-import type { Team } from "./types";
+import type { ConfirmationStatus, Team } from "./types";
 
 function AppShell() {
-  const { status } = useAuth();
+  const { status, session } = useAuth();
   const { players, loading, error } = usePlayers();
 
+  // Sem Supabase conectado, não há como autenticar de verdade — em vez de
+  // travar a tela num login que não pode funcionar, seguimos em modo
+  // demonstração e deixamos isso explícito (Seção 36).
+  const demoMode = !supabase;
+
+  const realGame = useNextGame(session?.playerId ?? null);
+  const [demoConfirmed, setDemoConfirmed] = useState<ConfirmationStatus | null>(null);
+
   const [tab, setTab] = useState<Tab>("Início");
-  const [confirmed, setConfirmed] = useState<ConfirmationStatus | null>(null);
   const [count, setCount] = useState(26);
   const [generated, setGenerated] = useState(false);
   const [teams, setTeams] = useState<Team[]>([]);
@@ -38,10 +45,18 @@ function AppShell() {
     setGenerated(true);
   }
 
-  // Sem Supabase conectado, não há como autenticar de verdade — em vez de
-  // travar a tela num login que não pode funcionar, seguimos em modo
-  // demonstração e deixamos isso explícito (Seção 36).
-  const demoMode = !supabase;
+  const confirmed = demoMode ? demoConfirmed : realGame.myStatus;
+  async function handleConfirm(newStatus: ConfirmationStatus) {
+    if (demoMode) {
+      setDemoConfirmed(newStatus);
+      return;
+    }
+    try {
+      await realGame.confirm(newStatus);
+    } catch {
+      // erro já fica exposto via realGame.error, mostrado abaixo
+    }
+  }
 
   if (!demoMode && status === "loading") {
     return <div className="flex min-h-screen items-center justify-center text-zinc-400">Carregando...</div>;
@@ -61,7 +76,8 @@ function AppShell() {
       <main className="mx-auto max-w-6xl p-4 pb-24">
         {demoMode && (
           <div className="mb-4 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-2 text-sm text-amber-300">
-            Modo demonstração: Supabase não configurado. Dados de jogadores são mockados e o login está desativado.
+            Modo demonstração: Supabase não configurado. Dados de jogadores são mockados, login e confirmação de
+            presença estão desativados.
           </div>
         )}
         {error && (
@@ -69,17 +85,30 @@ function AppShell() {
             {error}
           </div>
         )}
+        {!demoMode && realGame.error && (
+          <div className="mb-4 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-2 text-sm text-red-300">
+            {realGame.error}
+          </div>
+        )}
         <TabNav active={tab} onChange={setTab} />
         {tab === "Início" && (
           <HomePage
+            game={demoMode ? null : realGame.game}
             confirmed={confirmed}
-            onConfirm={setConfirmed}
+            onConfirm={handleConfirm}
             activePlayers={active}
             goalkeeperCount={players.filter((p) => p.isGoalkeeper).length}
             averageOverall={averageOverall}
           />
         )}
-        {tab === "Jogo" && <GamePage confirmed={confirmed} onConfirm={setConfirmed} />}
+        {tab === "Jogo" && (
+          <GamePage
+            game={demoMode ? null : realGame.game}
+            confirmed={confirmed}
+            onConfirm={handleConfirm}
+            counts={realGame.counts}
+          />
+        )}
         {tab === "Perfil" && <ProfilePage />}
         {tab === "Times" && (
           <TeamsPage
@@ -97,6 +126,8 @@ function AppShell() {
             teamCount={teamCount}
             onCountChange={setCount}
             onGenerate={generate}
+            game={realGame.game}
+            onGameCreated={realGame.reload}
           />
         )}
       </main>
