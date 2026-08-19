@@ -2,12 +2,18 @@ import { createContext, useContext, useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import { supabase } from "../lib/supabase";
 import type { AuthSession, AuthStatus } from "../types";
-import { loadCurrentSession, signInWithPhoneAndPin, signOut as signOutService } from "../services/authService";
+import {
+  loadCurrentSession,
+  signInWithPhoneAndPin,
+  signUpWithPhoneAndPin,
+  signOut as signOutService,
+} from "../services/authService";
 
 interface AuthContextValue {
   status: AuthStatus;
   session: AuthSession | null;
   signIn: (phone: string, pin: string) => Promise<void>;
+  signUp: (name: string, phone: string, pin: string) => Promise<void>;
   signOut: () => Promise<void>;
 }
 
@@ -38,6 +44,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await refresh();
   }
 
+  async function signUp(name: string, phone: string, pin: string) {
+    await signUpWithPhoneAndPin(name, phone, pin);
+    await refresh();
+  }
+
   async function signOut() {
     await signOutService();
     setSession(null);
@@ -45,7 +56,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   return (
-    <AuthContext.Provider value={{ status, session, signIn, signOut }}>
+    <AuthContext.Provider value={{ status, session, signIn, signUp, signOut }}>
       {children}
     </AuthContext.Provider>
   );

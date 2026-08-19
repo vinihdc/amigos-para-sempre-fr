@@ -92,7 +92,6 @@ function AppShell() {
         )}
         {tab === "Admin" && (
           <AdminPage
-            players={players}
             count={count}
             maxCount={Math.max(linePlayers.length, count)}
             teamCount={teamCount}
