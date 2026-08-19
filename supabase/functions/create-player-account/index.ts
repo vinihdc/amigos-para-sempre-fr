@@ -19,7 +19,6 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 Deno.serve(async (req) => {
   try {
     const authHeader = req.headers.get("Authorization") ?? "";
-
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
@@ -55,12 +54,10 @@ Deno.serve(async (req) => {
 
     const digits = phone.replace(/\D/g, "");
     const syntheticEmail = `${digits}@players.amigosparasempre.internal`;
-    // Precisa bater exatamente com src/services/authService.ts (derivePassword).
-    const password = `afs-${pin}`;
 
     const { data: newUser, error: createError } = await admin.auth.admin.createUser({
       email: syntheticEmail,
-      password,
+      password: pin,
       email_confirm: true,
     });
     if (createError) {

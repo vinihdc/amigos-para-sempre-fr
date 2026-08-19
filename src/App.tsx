@@ -10,7 +10,9 @@ import { LoginPage } from "./pages/LoginPage";
 import { AuthProvider, useAuth } from "./hooks/useAuth";
 import { usePlayers } from "./hooks/usePlayers";
 import { useNextGame } from "./hooks/useNextGame";
+import { useConfirmedPlayers } from "./hooks/useConfirmedPlayers";
 import { generateBalancedTeams } from "./algorithms/balance";
+import { selectEligiblePlayers } from "./algorithms/eligibility";
 import { supabase } from "./lib/supabase";
 import type { ConfirmationStatus, Team } from "./types";
 
@@ -24,24 +26,44 @@ function AppShell() {
   const demoMode = !supabase;
 
   const realGame = useNextGame(session?.playerId ?? null);
+  const confirmedPool = useConfirmedPlayers(demoMode ? null : (realGame.game?.id ?? null));
   const [demoConfirmed, setDemoConfirmed] = useState<ConfirmationStatus | null>(null);
 
   const [tab, setTab] = useState<Tab>("Início");
-  const [count, setCount] = useState(26);
+  const [capacity, setCapacity] = useState(26);
   const [generated, setGenerated] = useState(false);
   const [teams, setTeams] = useState<Team[]>([]);
 
-  const linePlayers = useMemo(() => players.filter((p) => !p.isGoalkeeper), [players]);
-  const active = useMemo(() => linePlayers.slice(0, count), [linePlayers, count]);
-  const teamCount = count >= 24 ? 4 : count >= 18 ? 3 : 0;
+  // Em modo demonstração, tratamos todo o mock como "confirmado" pra manter
+  // a experiência de teste igual à de antes. Fora do modo demo, o pool vem
+  // de fato das confirmações reais do próximo jogo (Seção 24).
+  const linePool = useMemo(
+    () => (demoMode ? players.filter((p) => !p.isGoalkeeper) : confirmedPool.linePlayers),
+    [demoMode, players, confirmedPool.linePlayers]
+  );
+  const goalkeeperPool = useMemo(
+    () => (demoMode ? players.filter((p) => p.isGoalkeeper) : confirmedPool.goalkeepers),
+    [demoMode, players, confirmedPool.goalkeepers]
+  );
+
+  // Regra "MENSALISTAS > AVULSOS" (Seção 16): dentro da capacidade definida
+  // pelo admin, mensalistas sempre entram primeiro; avulsos excedentes vão
+  // para a lista de espera.
+  const { eligible, waitlist } = useMemo(
+    () => selectEligiblePlayers(linePool, capacity),
+    [linePool, capacity]
+  );
+
+  const teamCount = eligible.length >= 24 ? 4 : eligible.length >= 18 ? 3 : 0;
+  const goalkeeperShortage = teamCount > 0 && goalkeeperPool.length < teamCount;
   const averageOverall = useMemo(
-    () => active.reduce((s, p) => s + p.overall, 0) / Math.max(1, active.length),
-    [active]
+    () => eligible.reduce((s, p) => s + p.overall, 0) / Math.max(1, eligible.length),
+    [eligible]
   );
 
   function generate() {
     if (!teamCount) return;
-    setTeams(generateBalancedTeams(active, teamCount));
+    setTeams(generateBalancedTeams(eligible, teamCount));
     setGenerated(true);
   }
 
@@ -90,14 +112,19 @@ function AppShell() {
             {realGame.error}
           </div>
         )}
+        {!demoMode && confirmedPool.error && (
+          <div className="mb-4 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-2 text-sm text-red-300">
+            {confirmedPool.error}
+          </div>
+        )}
         <TabNav active={tab} onChange={setTab} />
         {tab === "Início" && (
           <HomePage
             game={demoMode ? null : realGame.game}
             confirmed={confirmed}
             onConfirm={handleConfirm}
-            activePlayers={active}
-            goalkeeperCount={players.filter((p) => p.isGoalkeeper).length}
+            activePlayers={eligible}
+            goalkeeperCount={goalkeeperPool.length}
             averageOverall={averageOverall}
           />
         )}
@@ -115,19 +142,22 @@ function AppShell() {
             teams={teams}
             generated={generated}
             teamCount={teamCount}
-            playerCount={count}
+            playerCount={eligible.length}
             onGenerate={generate}
           />
         )}
         {tab === "Admin" && (
           <AdminPage
-            count={count}
-            maxCount={Math.max(linePlayers.length, count)}
+            capacity={capacity}
+            maxCapacity={Math.max(linePool.length, capacity)}
             teamCount={teamCount}
-            onCountChange={setCount}
+            onCapacityChange={setCapacity}
             onGenerate={generate}
-            game={realGame.game}
+            game={demoMode ? null : realGame.game}
             onGameCreated={realGame.reload}
+            waitlist={waitlist}
+            goalkeeperCount={goalkeeperPool.length}
+            goalkeeperShortage={goalkeeperShortage}
           />
         )}
       </main>

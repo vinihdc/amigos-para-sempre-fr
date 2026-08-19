@@ -2,7 +2,7 @@ import { supabase } from "../lib/supabase";
 import type { Player, Position } from "../types";
 import { getMockPlayers } from "./players.mock";
 
-interface PlayerRow {
+export interface PlayerRow {
   id: string;
   name: string;
   nickname: string | null;
@@ -14,7 +14,7 @@ interface PlayerRow {
   player_positions: { position: Position }[] | null;
 }
 
-function mapRow(row: PlayerRow): Player {
+export function mapRow(row: PlayerRow): Player {
   return {
     id: row.id,
     name: row.name,
@@ -28,7 +28,8 @@ function mapRow(row: PlayerRow): Player {
   };
 }
 
-const SELECT_COLUMNS = "id,name,nickname,overall,type,is_goalkeeper,active,phone,player_positions(position)";
+export const PLAYER_SELECT_COLUMNS = "id,name,nickname,overall,type,is_goalkeeper,active,phone,player_positions(position)";
+const SELECT_COLUMNS = PLAYER_SELECT_COLUMNS;
 
 /**
  * Busca jogadores ativos.

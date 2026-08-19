@@ -1,5 +1,6 @@
 import { supabase } from "../lib/supabase";
-import type { ConfirmationCounts, ConfirmationStatus, Game } from "../types";
+import type { ConfirmationCounts, ConfirmationStatus, Game, Player } from "../types";
+import { mapRow, PLAYER_SELECT_COLUMNS, type PlayerRow } from "./playersService";
 
 interface GameRow {
   id: string;
@@ -91,6 +92,40 @@ export async function fetchConfirmationCounts(gameId: string): Promise<Confirmat
     else if (row.status === "TALVEZ") counts.talvez++;
   }
   return counts;
+}
+
+export interface ConfirmedPlayers {
+  linePlayers: Player[];
+  goalkeepers: Player[];
+}
+
+/**
+ * Busca os jogadores que confirmaram presença (status VOU) para um jogo,
+ * já separados entre linha e goleiros (Seção 15 — goleiro não ocupa vaga
+ * de linha), preservando a ordem de confirmação (Seção 16, critério 3).
+ */
+export async function fetchConfirmedPlayers(gameId: string): Promise<ConfirmedPlayers> {
+  if (!supabase) return { linePlayers: [], goalkeepers: [] };
+
+  const { data, error } = await supabase
+    .from("game_confirmations")
+    .select(`confirmed_at, players(${PLAYER_SELECT_COLUMNS})`)
+    .eq("game_id", gameId)
+    .eq("status", "VOU")
+    .order("confirmed_at", { ascending: true });
+
+  if (error) {
+    throw new Error(`Falha ao carregar confirmados: ${error.message}`);
+  }
+
+  const players = ((data ?? []) as unknown as { players: PlayerRow }[])
+    .filter((row) => row.players)
+    .map((row) => mapRow(row.players));
+
+  return {
+    linePlayers: players.filter((p) => !p.isGoalkeeper),
+    goalkeepers: players.filter((p) => p.isGoalkeeper),
+  };
 }
 
 export interface NewGameInput {

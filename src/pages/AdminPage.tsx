@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Settings, Plus, Pencil, UserX, UserCheck, CalendarPlus } from "lucide-react";
+import { Settings, Plus, Pencil, UserX, UserCheck, CalendarPlus, AlertTriangle, Clock } from "lucide-react";
 import type { Game, Player } from "../types";
 import { usePlayerAdmin } from "../hooks/usePlayerAdmin";
 import { PlayerForm } from "../components/ui/PlayerForm";
@@ -7,16 +7,30 @@ import type { PlayerInput } from "../services/playersService";
 import { createGame } from "../services/gamesService";
 
 interface AdminPageProps {
-  count: number;
-  maxCount: number;
+  capacity: number;
+  maxCapacity: number;
   teamCount: number;
-  onCountChange: (count: number) => void;
+  onCapacityChange: (capacity: number) => void;
   onGenerate: () => void;
   game: Game | null;
   onGameCreated: () => void;
+  waitlist: Player[];
+  goalkeeperCount: number;
+  goalkeeperShortage: boolean;
 }
 
-export function AdminPage({ count, maxCount, teamCount, onCountChange, onGenerate, game, onGameCreated }: AdminPageProps) {
+export function AdminPage({
+  capacity,
+  maxCapacity,
+  teamCount,
+  onCapacityChange,
+  onGenerate,
+  game,
+  onGameCreated,
+  waitlist,
+  goalkeeperCount,
+  goalkeeperShortage,
+}: AdminPageProps) {
   const { players, loading, error, saving, create, update, deactivate, reactivate } = usePlayerAdmin();
   const [editing, setEditing] = useState<Player | "new" | null>(null);
   const [gameForm, setGameForm] = useState({ date: "", time: "20:00", location: "Arena Society" });
@@ -90,26 +104,61 @@ export function AdminPage({ count, maxCount, teamCount, onCountChange, onGenerat
           <Settings />
           <h2 className="text-2xl font-black">Montar Times</h2>
         </div>
-        <label className="text-sm text-zinc-400">Jogadores de linha confirmados</label>
+        <label className="text-sm text-zinc-400">
+          Capacidade de vagas (mensalistas entram primeiro — Seção 16)
+        </label>
         <input
           type="range"
           min="15"
-          max={maxCount}
-          value={count}
-          onChange={(e) => onCountChange(+e.target.value)}
+          max={maxCapacity}
+          value={capacity}
+          onChange={(e) => onCapacityChange(+e.target.value)}
           className="mt-3 w-full"
         />
         <div className="mt-2 font-bold">
-          {count} jogadores • {teamCount || "sem montagem automática"} times
+          {capacity} vagas • {teamCount || "sem montagem automática"} times
         </div>
         <p className="mt-3 text-sm text-zinc-500">
           Regras: mínimo 15 para realizar o futebol; mínimo 18 para montar 3 times; 24+ para 4 times; mínimo 6
           jogadores de linha por time.
         </p>
+
+        {goalkeeperShortage && (
+          <div className="mt-4 flex items-start gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-300">
+            <AlertTriangle size={16} className="mt-0.5 shrink-0" />
+            <span>
+              Só há {goalkeeperCount} goleiro(s) confirmado(s) para {teamCount} times. O sistema não decide isso
+              sozinho — defina manualmente como distribuir (Seção 15).
+            </span>
+          </div>
+        )}
+
         <button onClick={onGenerate} disabled={!teamCount} className="btn btn-primary mt-5">
           GERAR TIMES
         </button>
       </div>
+
+      {waitlist.length > 0 && (
+        <div className="card p-6">
+          <div className="mb-3 flex items-center gap-2">
+            <Clock size={18} className="text-amber-400" />
+            <h3 className="font-black">Lista de espera ({waitlist.length})</h3>
+          </div>
+          <p className="mb-3 text-sm text-zinc-500">
+            Avulsos que confirmaram mas ficaram fora da capacidade atual, em ordem de confirmação.
+          </p>
+          <div className="grid gap-2 md:grid-cols-2">
+            {waitlist.map((p, i) => (
+              <div key={p.id} className="flex items-center justify-between rounded-xl bg-zinc-900 p-3">
+                <span>
+                  {i + 1}. {p.name}
+                </span>
+                <span className="text-xs text-zinc-500">Avulso</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {editing && (
         <PlayerForm
