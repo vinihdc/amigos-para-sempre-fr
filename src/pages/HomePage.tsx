@@ -1,4 +1,4 @@
-import { CalendarDays, Users, ShieldCheck, Trophy, Clock3, CheckCircle2 } from "lucide-react";
+import { CalendarDays, Users, ShieldCheck, Trophy, Clock3, CheckCircle2, MapPin } from "lucide-react";
 import type { ConfirmationStatus, Game, Player } from "../types";
 import { ConfirmationButtons } from "../components/ui/ConfirmationButtons";
 
@@ -6,18 +6,35 @@ interface HomePageProps {
   game: Game | null;
   confirmed: ConfirmationStatus | null;
   onConfirm: (status: ConfirmationStatus) => void;
+  checkedInAt: string | null;
+  onCheckIn: () => void;
   activePlayers: Player[];
   goalkeeperCount: number;
   averageOverall: number;
 }
 
-export function HomePage({ game, confirmed, onConfirm, activePlayers, goalkeeperCount, averageOverall }: HomePageProps) {
+export function HomePage({
+  game,
+  confirmed,
+  onConfirm,
+  checkedInAt,
+  onCheckIn,
+  activePlayers,
+  goalkeeperCount,
+  averageOverall,
+}: HomePageProps) {
   const summary: [string, string | number, typeof Users][] = [
     ["Confirmados", activePlayers.length, Users],
     ["Goleiros", goalkeeperCount, ShieldCheck],
     ["Overall médio", averageOverall.toFixed(2), Trophy],
     ["Status", game?.status ?? "—", Clock3],
   ];
+
+  // Check-in só faz sentido pra quem confirmou VOU/TALVEZ (o banco também
+  // valida isso — migration 0007) e só abre 1h antes do horário marcado.
+  // Essa janela é regra de UX, não de segurança, por isso fica só aqui.
+  const canCheckIn = game && (confirmed === "VOU" || confirmed === "TALVEZ");
+  const checkInWindowOpen = game ? isCheckInWindowOpen(game) : false;
 
   return (
     <div className="grid gap-4 md:grid-cols-2">
@@ -44,6 +61,24 @@ export function HomePage({ game, confirmed, onConfirm, activePlayers, goalkeeper
                 <CheckCircle2 size={16} /> Status: {confirmed}
               </div>
             )}
+
+            {canCheckIn && (
+              <div className="mt-5 border-t border-white/10 pt-5">
+                {checkedInAt ? (
+                  <div className="flex items-center gap-2 text-sm font-bold text-emerald-400">
+                    <MapPin size={16} /> Você chegou às {formatTime(checkedInAt)}
+                  </div>
+                ) : checkInWindowOpen ? (
+                  <button onClick={onCheckIn} className="btn btn-primary w-full">
+                    CHEGUEI
+                  </button>
+                ) : (
+                  <p className="text-sm text-zinc-500">
+                    Check-in libera 1h antes do jogo ({subtractHours(game!.time, 1)}).
+                  </p>
+                )}
+              </div>
+            )}
           </>
         ) : (
           <p className="text-sm text-zinc-500">O administrador ainda não agendou o próximo jogo.</p>
@@ -68,4 +103,20 @@ export function HomePage({ game, confirmed, onConfirm, activePlayers, goalkeeper
 function formatDate(isoDate: string): string {
   const [year, month, day] = isoDate.split("-");
   return `${day}/${month}/${year}`;
+}
+
+function formatTime(isoDateTime: string): string {
+  return new Date(isoDateTime).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+}
+
+function subtractHours(time: string, hours: number): string {
+  const [h, m] = time.slice(0, 5).split(":").map(Number);
+  const total = (h * 60 + m - hours * 60 + 24 * 60) % (24 * 60);
+  return `${String(Math.floor(total / 60)).padStart(2, "0")}:${String(total % 60).padStart(2, "0")}`;
+}
+
+function isCheckInWindowOpen(game: Game): boolean {
+  const gameDateTime = new Date(`${game.date}T${game.time}`);
+  const windowStart = new Date(gameDateTime.getTime() - 60 * 60 * 1000);
+  return new Date() >= windowStart;
 }

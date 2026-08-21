@@ -56,6 +56,51 @@ export async function fetchMyConfirmation(gameId: string, playerId: string): Pro
 }
 
 /**
+ * Busca o horário do check-in (presença física real), distinto da
+ * confirmação VOU/NÃO VOU/TALVEZ (que é só intenção — Seção "PRESENÇA NÃO
+ * É CHECK-IN" da especificação v3). Retorna null se o jogador ainda não
+ * chegou.
+ */
+export async function fetchMyCheckIn(gameId: string, playerId: string): Promise<string | null> {
+  if (!supabase) return null;
+
+  const { data, error } = await supabase
+    .from("session_participation")
+    .select("checked_in_at")
+    .eq("game_id", gameId)
+    .eq("player_id", playerId)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(`Falha ao carregar check-in: ${error.message}`);
+  }
+  return data?.checked_in_at ?? null;
+}
+
+/**
+ * Registra o check-in ("CHEGUEI"). O banco (migration 0006, trigger
+ * validate_checkin_status) já rejeita check-in de quem não está VOU/TALVEZ
+ * — aqui é só a chamada; a janela de horário (1h antes do jogo) é decisão
+ * de UX e fica no hook/tela, não é uma trava de segurança.
+ */
+export async function checkIn(gameId: string, playerId: string): Promise<void> {
+  if (!supabase) {
+    throw new Error("Supabase não configurado — check-in não pode ser salvo em modo demonstração.");
+  }
+
+  const { error } = await supabase
+    .from("session_participation")
+    .upsert(
+      { game_id: gameId, player_id: playerId, checked_in_at: new Date().toISOString(), updated_at: new Date().toISOString() },
+      { onConflict: "game_id,player_id" }
+    );
+
+  if (error) {
+    throw new Error(`Falha ao registrar check-in: ${error.message}`);
+  }
+}
+
+/**
  * Confirma presença (ou muda de ideia). Usa upsert porque a tabela tem
  * unique(game_id, player_id) — a RLS da migration 0005 garante que só dá
  * pra confirmar por si mesmo (ou ser admin).

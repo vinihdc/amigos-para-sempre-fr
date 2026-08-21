@@ -123,6 +123,8 @@ function AppShell() {
             game={demoMode ? null : realGame.game}
             confirmed={confirmed}
             onConfirm={handleConfirm}
+            checkedInAt={demoMode ? null : realGame.checkedInAt}
+            onCheckIn={() => realGame.checkIn().catch(() => {})}
             activePlayers={eligible}
             goalkeeperCount={goalkeeperPool.length}
             averageOverall={averageOverall}
