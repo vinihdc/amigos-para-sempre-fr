@@ -12,6 +12,9 @@ create table if not exists football_settings (
   match_duration_minutes int not null default 10 check (match_duration_minutes between 1 and 60),
 
   -- Formação dos times.
+  -- field_players_per_team representa o mínimo de jogadores de linha por time.
+  -- A distribuição pode continuar flexível, por exemplo 26 jogadores em 4
+  -- times = 7/7/6/6 quando o mínimo configurado é 6.
   field_players_per_team int not null default 6 check (field_players_per_team between 4 and 11),
   goalkeeper_count int not null default 4 check (goalkeeper_count between 0 and 10),
   minimum_players_for_game int not null default 15 check (minimum_players_for_game >= 1),
@@ -32,6 +35,12 @@ create table if not exists football_settings (
 
   check (minimum_players_for_3_teams >= minimum_players_for_game),
   check (minimum_players_for_4_teams >= minimum_players_for_3_teams),
+
+  -- Evita uma configuração impossível, como 7 jogadores por time e corte de
+  -- apenas 18 jogadores para formar 3 times (seriam necessários pelo menos 21).
+  check (minimum_players_for_3_teams >= field_players_per_team * 3),
+  check (minimum_players_for_4_teams >= field_players_per_team * 4),
+
   check (lower_percentile < upper_percentile)
 );
 
