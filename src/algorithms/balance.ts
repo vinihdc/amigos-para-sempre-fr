@@ -15,12 +15,14 @@ const score=(teams:Team[])=>{
 
 /**
  * Gera times equilibrados usando overall e distribuição de posições.
- * `fieldPlayersPerTeam` vem das configurações do Admin; não deve ficar
- * hardcoded no algoritmo porque o futebol pode operar com 6 ou 7 na linha.
+ * `minimumFieldPlayersPerTeam` vem das configurações do Admin e representa
+ * o mínimo necessário para considerar a formação válida. A distribuição
+ * continua flexível (ex.: 26 jogadores em 4 times = 7/7/6/6), preservando
+ * o comportamento que o projeto já possuía.
  */
-export function generateBalancedTeams(players:Player[], teamCount:number, fieldPlayersPerTeam=6):Team[]{
-  if(players.length<teamCount*fieldPlayersPerTeam) {
-    throw new Error(`São necessários ${teamCount*fieldPlayersPerTeam} jogadores de linha.`);
+export function generateBalancedTeams(players:Player[], teamCount:number, minimumFieldPlayersPerTeam=6):Team[]{
+  if(players.length<teamCount*minimumFieldPlayersPerTeam) {
+    throw new Error(`São necessários pelo menos ${teamCount*minimumFieldPlayersPerTeam} jogadores de linha.`);
   }
   const sizes=Array(teamCount).fill(Math.floor(players.length/teamCount));
   for(let i=0;i<players.length%teamCount;i++) sizes[i]++;
@@ -36,7 +38,7 @@ export function generateBalancedTeams(players:Player[], teamCount:number, fieldP
         const bb=b.players.reduce((s,x)=>s+x.overall,0)/Math.max(1,b.players.length);
         return aa-bb || a.players.length-b.players.length;
       });
-      const eligible=ranked.find(t=>t.players.length<fieldPlayersPerTeam);
+      const eligible=ranked.find(t=>t.players.length<sizes[+t.id]);
       (eligible||ranked[0]).players.push(p);
     });
     const s=score(teams);
