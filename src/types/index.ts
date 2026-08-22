@@ -20,6 +20,28 @@ export interface ConfirmationCounts{
   talvez:number;
 }
 
+/**
+ * Parâmetros de negócio editáveis pelo administrador.
+ *
+ * Estes valores ficam no Supabase (football_settings) e substituem números
+ * hardcoded espalhados pelo frontend. A lógica continua no código; somente
+ * os valores que podem mudar sem deploy ficam parametrizados.
+ */
+export interface FootballSettings{
+  sessionDurationMinutes:number;
+  matchDurationMinutes:number;
+  fieldPlayersPerTeam:number;
+  goalkeeperCount:number;
+  minimumPlayersForGame:number;
+  minimumPlayersFor3Teams:number;
+  minimumPlayersFor4Teams:number;
+  subscriberPriorityEnabled:boolean;
+  minimumVotesForHighlight:number;
+  minimumVotesForTrimming:number;
+  lowerPercentile:number;
+  upperPercentile:number;
+}
+
 /** Sessão de autenticação vinculada a um jogador (telefone + PIN). */
 export interface AuthSession{
   userId:string;
