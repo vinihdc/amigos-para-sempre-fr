@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Header } from "./components/layout/Header";
 import { TabNav, type Tab } from "./components/layout/TabNav";
 import { HomePage } from "./pages/HomePage";
@@ -11,6 +11,7 @@ import { AuthProvider, useAuth } from "./hooks/useAuth";
 import { usePlayers } from "./hooks/usePlayers";
 import { useNextGame } from "./hooks/useNextGame";
 import { useConfirmedPlayers } from "./hooks/useConfirmedPlayers";
+import { useFootballSettings } from "./hooks/useFootballSettings";
 import { generateBalancedTeams } from "./algorithms/balance";
 import { selectEligiblePlayers } from "./algorithms/eligibility";
 import { supabase } from "./lib/supabase";
@@ -19,10 +20,11 @@ import type { ConfirmationStatus, Team } from "./types";
 function AppShell() {
   const { status, session } = useAuth();
   const { players, loading, error } = usePlayers();
+  const footballSettings = useFootballSettings();
 
   // Sem Supabase conectado, não há como autenticar de verdade — em vez de
   // travar a tela num login que não pode funcionar, seguimos em modo
-  // demonstração e deixamos isso explícito (Seção 36).
+  // demonstração e deixamos isso explícito.
   const demoMode = !supabase;
 
   const realGame = useNextGame(session?.playerId ?? null);
@@ -34,9 +36,15 @@ function AppShell() {
   const [generated, setGenerated] = useState(false);
   const [teams, setTeams] = useState<Team[]>([]);
 
+  // Se o administrador aumentar o mínimo para realização do futebol,
+  // garantimos que o controle de capacidade não permaneça abaixo da regra.
+  useEffect(() => {
+    setCapacity((current) => Math.max(current, footballSettings.settings.minimumPlayersForGame));
+  }, [footballSettings.settings.minimumPlayersForGame]);
+
   // Em modo demonstração, tratamos todo o mock como "confirmado" pra manter
   // a experiência de teste igual à de antes. Fora do modo demo, o pool vem
-  // de fato das confirmações reais do próximo jogo (Seção 24).
+  // das confirmações reais do próximo jogo.
   const linePool = useMemo(
     () => (demoMode ? players.filter((p) => !p.isGoalkeeper) : confirmedPool.linePlayers),
     [demoMode, players, confirmedPool.linePlayers]
@@ -46,15 +54,22 @@ function AppShell() {
     [demoMode, players, confirmedPool.goalkeepers]
   );
 
-  // Regra "MENSALISTAS > AVULSOS" (Seção 16): dentro da capacidade definida
-  // pelo admin, mensalistas sempre entram primeiro; avulsos excedentes vão
-  // para a lista de espera.
+  // A prioridade mensalista > avulso agora é controlada pelo parâmetro
+  // subscriberPriorityEnabled, em vez de ficar permanentemente hardcoded.
   const { eligible, waitlist } = useMemo(
-    () => selectEligiblePlayers(linePool, capacity),
-    [linePool, capacity]
+    () => selectEligiblePlayers(linePool, capacity, footballSettings.settings.subscriberPriorityEnabled),
+    [linePool, capacity, footballSettings.settings.subscriberPriorityEnabled]
   );
 
-  const teamCount = eligible.length >= 24 ? 4 : eligible.length >= 18 ? 3 : 0;
+  // Os cortes 18/24 deixaram de ser números mágicos: são lidos da
+  // configuração administrável no Supabase.
+  const teamCount =
+    eligible.length >= footballSettings.settings.minimumPlayersFor4Teams
+      ? 4
+      : eligible.length >= footballSettings.settings.minimumPlayersFor3Teams
+        ? 3
+        : 0;
+
   const goalkeeperShortage = teamCount > 0 && goalkeeperPool.length < teamCount;
   const averageOverall = useMemo(
     () => eligible.reduce((s, p) => s + p.overall, 0) / Math.max(1, eligible.length),
@@ -63,7 +78,7 @@ function AppShell() {
 
   function generate() {
     if (!teamCount) return;
-    setTeams(generateBalancedTeams(eligible, teamCount));
+    setTeams(generateBalancedTeams(eligible, teamCount, footballSettings.settings.fieldPlayersPerTeam));
     setGenerated(true);
   }
 
@@ -151,7 +166,7 @@ function AppShell() {
         {tab === "Admin" && (
           <AdminPage
             capacity={capacity}
-            maxCapacity={Math.max(linePool.length, capacity)}
+            maxCapacity={Math.max(linePool.length, capacity, footballSettings.settings.minimumPlayersForGame)}
             teamCount={teamCount}
             onCapacityChange={setCapacity}
             onGenerate={generate}
@@ -160,6 +175,11 @@ function AppShell() {
             waitlist={waitlist}
             goalkeeperCount={goalkeeperPool.length}
             goalkeeperShortage={goalkeeperShortage}
+            settings={footballSettings.settings}
+            settingsLoading={footballSettings.loading}
+            settingsSaving={footballSettings.saving}
+            settingsError={footballSettings.error}
+            onSaveSettings={footballSettings.save}
           />
         )}
       </main>
