@@ -20,12 +20,15 @@ import type { ConfirmationStatus, Team } from "./types";
 function AppShell() {
   const { status, session } = useAuth();
   const { players, loading, error } = usePlayers();
-  const footballSettings = useFootballSettings();
 
   // Sem Supabase conectado, não há como autenticar de verdade — em vez de
   // travar a tela num login que não pode funcionar, seguimos em modo
   // demonstração e deixamos isso explícito.
   const demoMode = !supabase;
+
+  // Com Supabase real, esperamos autenticação antes de consultar uma tabela
+  // protegida por RLS. Em demo, o service devolve os valores padrão locais.
+  const footballSettings = useFootballSettings(demoMode || status === "authenticated");
 
   const realGame = useNextGame(session?.playerId ?? null);
   const confirmedPool = useConfirmedPlayers(demoMode ? null : (realGame.game?.id ?? null));
@@ -61,15 +64,18 @@ function AppShell() {
     [linePool, capacity, footballSettings.settings.subscriberPriorityEnabled]
   );
 
-  // Os cortes 18/24 deixaram de ser números mágicos: são lidos da
-  // configuração administrável no Supabase.
-  const teamCount =
-    eligible.length >= footballSettings.settings.minimumPlayersFor4Teams
-      ? 4
-      : eligible.length >= footballSettings.settings.minimumPlayersFor3Teams
-        ? 3
-        : 0;
+  // Mesmo que o Admin informe um corte menor por engano, nunca declaramos
+  // 3/4 times antes de existir a quantidade mínima de jogadores por time.
+  const minFor3Teams = Math.max(
+    footballSettings.settings.minimumPlayersFor3Teams,
+    footballSettings.settings.fieldPlayersPerTeam * 3
+  );
+  const minFor4Teams = Math.max(
+    footballSettings.settings.minimumPlayersFor4Teams,
+    footballSettings.settings.fieldPlayersPerTeam * 4
+  );
 
+  const teamCount = eligible.length >= minFor4Teams ? 4 : eligible.length >= minFor3Teams ? 3 : 0;
   const goalkeeperShortage = teamCount > 0 && goalkeeperPool.length < teamCount;
   const averageOverall = useMemo(
     () => eligible.reduce((s, p) => s + p.overall, 0) / Math.max(1, eligible.length),
